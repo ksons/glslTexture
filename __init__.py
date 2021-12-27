@@ -15,7 +15,7 @@ bl_info = {
     "name": "glslTexture",
     "author": "Patricio Gonzalez Vivo",
     "description": "Adds a texture generated from a GLSL frament shader",
-    "blender": (2, 80, 0),
+    "blender": (3, 0, 0),
     "version": (0, 0, 1),
     "location": "Add",
     "warning": "",
