@@ -13,8 +13,8 @@
 
 bl_info = {
     "name": "glslTexture",
-    "author": "Patricio Gonzalez Vivo",
-    "description": "Adds a texture generated from a GLSL frament shader",
+    "author": "Patricio Gonzalez Vivo, Kristian Sons",
+    "description": "Adds a texture generated from a GLSL shader in ShaderToy style",
     "blender": (3, 0, 0),
     "version": (0, 0, 1),
     "location": "Add",
@@ -30,9 +30,9 @@ from gpu_extras.batch import batch_for_shader
 from bpy.app.handlers import persistent
 
 class GlslTexture(bpy.types.Operator):
-    """Make a texture from a GLSL Shader"""
+    """Make a texture from a Shadertoy Shader"""
     bl_idname = 'add.glsltexture'
-    bl_label = 'GlslTexture'
+    bl_label = 'Shadertoy Texture'
     bl_options = { 'REGISTER', 'UNDO' }
     
     width: bpy.props.IntProperty(
@@ -82,22 +82,46 @@ void main() {
 '''
 
         self.default_code = '''
-uniform vec2    u_resolution;
-uniform float   u_time;
 
-void main() {
+void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     vec3 color = vec3(0.0); 
-    vec2 st = gl_FragCoord.xy / u_resolution;
+    vec2 st = fragCoord.xy / iResolution.xy;
     
     color.rg = st;
-    color.b = abs(sin(u_time));
+    color.b = abs(sin(iTime));
 
-    gl_FragColor = vec4(color, 1.0);
+    fragColor = vec4(color, 1.0);
 }
+
+'''
+
+        self.st_context_code = '''
+uniform vec3      iResolution;           // viewport resolution (in pixels)
+uniform float     iTime;                 // shader playback time (in seconds)
+uniform float     iTimeDelta;            // render time (in seconds)
+uniform int       iFrame;                // shader playback frame
+uniform float     iChannelTime[4];       // channel playback time (in seconds)
+uniform vec3      iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4      iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+// uniform samplerXX iChannel0..3;          // input channel. XX = 2D/Cube
+uniform vec4      iDate;                 // (year, month, day, time in seconds)
+uniform float     iSampleRate;           // sound sample rate (i.e., 44100)
+
+out vec4 shadertoy_out_color;
+
+{}
+
+void main( void ) {{
+    vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+    mainImage( color, gl_FragCoord.xy );
+    shadertoy_out_color = vec4(color.xyz, 1.0);
+}}
+
 '''
 
         self.current_code = ""
         self.current_time = 0.0
+        self.current_frame = 1
 
         self.shader = None
         self.batch = None
@@ -143,6 +167,7 @@ void main() {
             recompile = False
 
             now = context.scene.frame_float / context.scene.render.fps
+
             
             # If shader content change 
             if self.current_code != bpy.data.texts[self.source].as_string():
@@ -154,6 +179,9 @@ void main() {
             if render or recompile:
                 self.current_code = bpy.data.texts[self.source].as_string()
                 self.current_time = now
+                self.current_frame = context.scene.frame_current
+
+                shader_code = self.st_context_code.format(self.current_code)
             
                 offscreen = gpu.types.GPUOffScreen(self.width, self.height)
                 with offscreen.bind():
@@ -162,7 +190,7 @@ void main() {
                     # If there is no shader or need to be recompiled
                     if self.shader == None or recompile:
                         try:    
-                            self.shader = gpu.types.GPUShader(self.vertex_default, self.current_code)
+                            self.shader = gpu.types.GPUShader(self.vertex_default, shader_code)
                         except Exception as Err:
                             print(Err)
                             self.shader = None
@@ -180,13 +208,18 @@ void main() {
                         self.shader.bind()
             
                         try:
-                            self.shader.uniform_float('u_time', self.current_time)
+                            self.shader.uniform_float('iTime', self.current_time)
                         except ValueError:
                             pass
-            
+
                         try:
-                            self.shader.uniform_float('u_resolution', (self.width, self.height))
-                        except ValueError: 
+                            self.shader.uniform_int('iFrame', self.current_frame)
+                        except ValueError:
+                            pass
+
+                        try:
+                            self.shader.uniform_float('iResolution', (self.width, self.height, 0))
+                        except ValueError:
                             pass
             
                         self.batch.draw(self.shader)
