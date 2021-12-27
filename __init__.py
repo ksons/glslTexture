@@ -232,6 +232,7 @@ def loadGlslTextures(dummy):
             bpy.ops.texture.glsl_texture('INVOKE_DEFAULT', width=width, height=height, source=source_name)
 
 def menu_func(self, context):
+    self.layout.operator_context = 'INVOKE_DEFAULT'
     self.layout.operator(GlslTexture.bl_idname, text=GlslTexture.bl_label,icon='COLORSET_02_VEC')
 
 def register():
