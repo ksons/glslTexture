@@ -29,6 +29,8 @@ import bgl
 from gpu_extras.batch import batch_for_shader
 from bpy.app.handlers import persistent
 
+from datetime import date, datetime
+
 class GlslTexture(bpy.types.Operator):
     """Make a texture from a Shadertoy Shader"""
     bl_idname = 'add.glsltexture'
@@ -222,6 +224,13 @@ void main( void ) {{
                         except ValueError:
                             pass
             
+                        try:
+                            n = datetime.now()
+                            seconds_since_midnight = (n - n.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
+                            self.shader.uniform_float('iDate', (n.year, n.month, n.day, seconds_since_midnight))
+                        except ValueError:
+                            pass
+
                         self.batch.draw(self.shader)
 
                     buffer = bgl.Buffer(bgl.GL_BYTE, self.width * self.height * 4)
