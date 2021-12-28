@@ -86,13 +86,14 @@ void main() {
         self.default_code = '''
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
-    vec3 color = vec3(0.0); 
-    vec2 st = fragCoord.xy / iResolution.xy;
-    
-    color.rg = st;
-    color.b = abs(sin(iTime));
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = fragCoord/iResolution.xy;
 
-    fragColor = vec4(color, 1.0);
+    // Time varying pixel color
+    vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
+
+    // Output to screen
+    fragColor = vec4(col,1.0);
 }
 
 '''
@@ -223,7 +224,7 @@ void main( void ) {{
                             self.shader.uniform_float('iResolution', (self.width, self.height, 0))
                         except ValueError:
                             pass
-            
+
                         try:
                             n = datetime.now()
                             seconds_since_midnight = (n - n.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
