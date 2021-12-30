@@ -1,4 +1,21 @@
-Create textures from Glsl fragment shaders on Blender 2.8+ (works only on Linux and Windows for now)
+Create textures from [ShaderToy](https://www.shadertoy.com/) shaders on Blender 3.0.
+
+This is a slight modification of [glslTexture](https://github.com/patriciogonzalezvivo/glslTexture) from Patricio Gonzalez Vivo to follow the ShaderToy shader conventions.
+
+Supported shader inputs:
+
+- [x] _iResolution_ - viewport resolution (in pixels)
+- [x] _iTime_ - shader playback time (in seconds)
+- [ ] _iTimeDelta_ - render time (in seconds)
+- [x] _iFrame_ - shader playback frame
+- [ ] _iChannelTime[4]_ - channel playback time (in seconds)
+- [ ] _iChannelResolution[4]_ - channel resolution (in pixels)
+- [ ] _iMouse_ - mouse pixel coords. xy: current (if MLB down), zw: click
+- [ ] _iChannel0..3_ - input channel. XX = 2D/Cube
+- [x] _iDate_ - (year, month, day, time in seconds)
+- [ ] _iSampleRate_ - sound sample rate (i.e., 44100)
+
+
 
 # Install
 
