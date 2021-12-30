@@ -31,6 +31,58 @@ from bpy.app.handlers import persistent
 
 from datetime import date, datetime
 
+FRAGMENT_DEFAULT = '''
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = fragCoord/iResolution.xy;
+
+    // Time varying pixel color
+    vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
+
+    // Output to screen
+    fragColor = vec4(col,1.0);
+}
+
+'''
+
+VERTEX_DEFAULT = '''
+in vec2 a_position;
+in vec2 a_texcoord;
+
+void main() {
+    gl_Position = vec4(a_position, 0.0, 1.0);
+}
+'''
+
+SHADERTOY_CONTEXT = '''
+uniform vec3      iResolution;           // viewport resolution (in pixels)
+uniform float     iTime;                 // shader playback time (in seconds)
+uniform float     iTimeDelta;            // render time (in seconds)
+uniform int       iFrame;                // shader playback frame
+uniform float     iChannelTime[4];       // channel playback time (in seconds)
+uniform vec3      iChannelResolution[4]; // channel resolution (in pixels)
+uniform vec4      iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+// uniform samplerXX iChannel0..3;       // input channel. XX = 2D/Cube
+uniform sampler2D iChannel0;             // input channel 0
+uniform sampler2D iChannel1;             // input channel 1
+uniform sampler2D iChannel2;             // input channel 2
+uniform sampler2D iChannel3;             // input channel 3
+uniform vec4      iDate;                 // (year, month, day, time in seconds)
+uniform float     iSampleRate;           // sound sample rate (i.e., 44100)
+
+out vec4 shadertoy_out_color;
+
+{}
+
+void main( void ) {{
+    vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+    mainImage( color, gl_FragCoord.xy );
+    shadertoy_out_color = vec4(color.xyz, color.a);
+}}
+
+'''
+
 class GlslTexture(bpy.types.Operator):
     """Make a texture from a Shadertoy Shader"""
     bl_idname = 'add.glsltexture'
@@ -58,6 +110,11 @@ class GlslTexture(bpy.types.Operator):
         default = 'default.frag'
     )
 
+    current_code = bpy.props.StringProperty(default = FRAGMENT_DEFAULT)
+    current_time = bpy.props.FloatProperty(default = 0.0)
+
+
+
     @classmethod
     def poll(cls, context):
         return True
@@ -74,60 +131,8 @@ class GlslTexture(bpy.types.Operator):
     
     def invoke(self, context, event):
         
-        self.vertex_default = '''
-in vec2 a_position;
-in vec2 a_texcoord;
-
-void main() {
-    gl_Position = vec4(a_position, 0.0, 1.0);
-}
-'''
-
-        self.default_code = '''
-
-void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
-    // Normalized pixel coordinates (from 0 to 1)
-    vec2 uv = fragCoord/iResolution.xy;
-
-    // Time varying pixel color
-    vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
-
-    // Output to screen
-    fragColor = vec4(col,1.0);
-}
-
-'''
-
-        self.st_context_code = '''
-uniform vec3      iResolution;           // viewport resolution (in pixels)
-uniform float     iTime;                 // shader playback time (in seconds)
-uniform float     iTimeDelta;            // render time (in seconds)
-uniform int       iFrame;                // shader playback frame
-uniform float     iChannelTime[4];       // channel playback time (in seconds)
-uniform vec3      iChannelResolution[4]; // channel resolution (in pixels)
-uniform vec4      iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
-// uniform samplerXX iChannel0..3;          // input channel. XX = 2D/Cube
-uniform vec4      iDate;                 // (year, month, day, time in seconds)
-uniform float     iSampleRate;           // sound sample rate (i.e., 44100)
-
-out vec4 shadertoy_out_color;
-
-{}
-
-void main( void ) {{
-    vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
-    mainImage( color, gl_FragCoord.xy );
-    shadertoy_out_color = vec4(color.xyz, 1.0);
-}}
-
-'''
-
-        self.current_code = ""
-        self.current_time = 0.0
         self.current_frame = 1
-
-        self.shader = None
-        self.batch = None
+        self.init_resources()   
     
         wm = context.window_manager
         return wm.invoke_props_dialog(self)
@@ -150,7 +155,7 @@ void main( void ) {{
                 # else create a internal file with the default fragment code
                 else:
                     bpy.data.texts.new(self.source)
-                    bpy.data.texts[self.source].write(self.default_code)
+                    bpy.data.texts[self.source].write(FRAGMENT_DEFAULT)
             
             # If the source file is external and it have been modify, reload it
             if not bpy.data.texts[self.source].is_in_memory and bpy.data.texts[self.source].is_modified:
@@ -184,7 +189,7 @@ void main( void ) {{
                 self.current_time = now
                 self.current_frame = context.scene.frame_current
 
-                shader_code = self.st_context_code.format(self.current_code)
+                shader_code = SHADERTOY_CONTEXT.format(self.current_code)
             
                 offscreen = gpu.types.GPUOffScreen(self.width, self.height)
                 with offscreen.bind():
@@ -193,7 +198,7 @@ void main( void ) {{
                     # If there is no shader or need to be recompiled
                     if self.shader == None or recompile:
                         try:    
-                            self.shader = gpu.types.GPUShader(self.vertex_default, shader_code)
+                            self.shader = gpu.types.GPUShader(VERTEX_DEFAULT, shader_code)
                         except Exception as Err:
                             print(Err)
                             self.shader = None
@@ -251,7 +256,12 @@ void main( void ) {{
                     
         return {'PASS_THROUGH'}
     
+    def init_resources(self):
+        self.shader = None
+        self.batch = None
+
     def execute(self, context):
+        self.init_resources()
         wm = context.window_manager
         self.timer = wm.event_timer_add(0.1, window=context.window)
         wm.modal_handler_add(self)
@@ -259,8 +269,9 @@ void main( void ) {{
     
     def cancel(self, context):
         print(f'GlslTexture {self.source} cancel refreshing')
-        wm = context.window_manager
-        wm.event_timer_remove(self.timer)
+        if self.timer:
+            wm = context.window_manager
+            wm.event_timer_remove(self.timer)
 
 
 @persistent
@@ -272,7 +283,7 @@ def loadGlslTextures(dummy):
             width = bpy.data.images[source_name].generated_width
             height = bpy.data.images[source_name].generated_height
             print(f"Loading GlslTexture {source_name}")
-            bpy.ops.texture.glsl_texture('INVOKE_DEFAULT', width=width, height=height, source=source_name)
+            bpy.ops.add.glsltexture('EXEC_DEFAULT', width=width, height=height, source=source_name)
 
 def menu_func(self, context):
     self.layout.operator_context = 'INVOKE_DEFAULT'
