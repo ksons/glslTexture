@@ -239,9 +239,9 @@ class GlslTexture(bpy.types.Operator):
 
                         self.batch.draw(self.shader)
 
-                    buffer = bgl.Buffer(bgl.GL_BYTE, self.width * self.height * 4)
+                    buffer = bgl.Buffer(bgl.GL_FLOAT, self.width * self.height * 4)
                     bgl.glReadBuffer(bgl.GL_BACK)
-                    bgl.glReadPixels(0, 0, self.width, self.height, bgl.GL_RGBA, bgl.GL_UNSIGNED_BYTE, buffer)
+                    bgl.glReadPixels(0, 0, self.width, self.height, bgl.GL_RGBA, bgl.GL_FLOAT, buffer)
                     render = True
 
                 offscreen.free()
@@ -252,7 +252,7 @@ class GlslTexture(bpy.types.Operator):
                         bpy.data.images.new(name, self.width, self.height)
                     image = bpy.data.images[name]
                     image.scale(self.width, self.height)
-                    image.pixels = [v / 255 for v in buffer]
+                    image.pixels.foreach_set(buffer)
                     
         return {'PASS_THROUGH'}
     
