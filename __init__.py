@@ -25,7 +25,6 @@ bl_info = {
 
 import bpy
 import gpu
-import bgl
 from gpu_extras.batch import batch_for_shader
 from bpy.app.handlers import persistent
 
@@ -193,7 +192,8 @@ class GlslTexture(bpy.types.Operator):
             
                 offscreen = gpu.types.GPUOffScreen(self.width, self.height)
                 with offscreen.bind():
-                    bgl.glClear(bgl.GL_COLOR_BUFFER_BIT)
+                    fb = gpu.state.active_framebuffer_get()
+                    fb.clear(color=(0.0, 0.0, 0.0, 0.0))
     
                     # If there is no shader or need to be recompiled
                     if self.shader == None or recompile:
@@ -239,9 +239,8 @@ class GlslTexture(bpy.types.Operator):
 
                         self.batch.draw(self.shader)
 
-                    buffer = bgl.Buffer(bgl.GL_FLOAT, self.width * self.height * 4)
-                    bgl.glReadBuffer(bgl.GL_BACK)
-                    bgl.glReadPixels(0, 0, self.width, self.height, bgl.GL_RGBA, bgl.GL_FLOAT, buffer)
+                    buffer = fb.read_color(0, 0, self.width, self.height, 4, 0, 'FLOAT')
+                    buffer.dimensions = self.width * self.height * 4
                     render = True
 
                 offscreen.free()
